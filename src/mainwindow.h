@@ -24,8 +24,8 @@ class MainWindow : public QGraphicsView
     Q_OBJECT
 
 public:
-    void mainSceneInitiliazation();
-    void drawingSceneInitiliazation();
+    void mainSceneInitialization();
+    void drawingSceneInitialization();
     void initialize(int i);
     void Koch(int i, QVector<QPointF> *tmp);
     void Levi(int i, QVector<QPointF> *tmp);

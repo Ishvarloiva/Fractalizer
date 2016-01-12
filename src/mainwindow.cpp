@@ -13,7 +13,6 @@ MainWindow::MainWindow(QWidget *parent)
     setDragMode(ScrollHandDrag);
     setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
 
-
     mainSceneInitiliazation();
     drawingSceneInitiliazation();
 
