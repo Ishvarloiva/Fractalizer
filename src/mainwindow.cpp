@@ -13,13 +13,13 @@ MainWindow::MainWindow(QWidget *parent)
     setDragMode(ScrollHandDrag);
     setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
 
-    mainSceneInitiliazation();
-    drawingSceneInitiliazation();
+    mainSceneInitialization();
+    drawingSceneInitialization();
 
     new_item();
 }
 
-void MainWindow::mainSceneInitiliazation()
+void MainWindow::mainSceneInitialization()
 {
     //Create scene
     scene = new QGraphicsScene;
@@ -82,23 +82,23 @@ void MainWindow::mainSceneInitiliazation()
     mainSceneLayout.addWidget(parameters);
 }
 
-void MainWindow::drawingSceneInitiliazation()
+void MainWindow::drawingSceneInitialization()
 {
     //Create drawing scene
-    drawing_scene = new QGraphicsScene;
-    drawing_scene->setSceneRect(0,0,1000,1000);
+    drawingScene = new QGraphicsScene;
+    drawingScene->setSceneRect(0,0,1000,1000);
 
     //Configure button that create new joint of custom rule
     new_joint = new QPushButton("New joint",this);
     connect(new_joint,SIGNAL(clicked()),
-            this,SLOT(create_joint()));
+            this,SLOT(createJoint()));
     new_joint->setGeometry(0,0,100,50);
     new_joint->hide();
 
     //Configure button that delete last created joint of custom rule
     delete_joint_button = new QPushButton("Delete joint",this);
     connect(delete_joint_button,SIGNAL(clicked()),
-            this,SLOT(delete_joint()));
+            this,SLOT(deleteJoint()));
     delete_joint_button->setGeometry(0,50,100,50);
     delete_joint_button->hide();
 
@@ -117,14 +117,14 @@ void MainWindow::drawingSceneInitiliazation()
     cancel_custom_rule->hide();
 
     //Make scene dynamically redraw
-    connect(drawing_scene,SIGNAL(changed(QList<QRectF>)),
+    connect(drawingScene,SIGNAL(changed(QList<QRectF>)),
         this,SLOT(change_custom_rule()));
 
     //Create and place stub for custom rule
     customRulePoints << QPointF(150,500) << QPointF(850,500);
     customRule = new QGraphicsPathItem();
     customRule->setPath(makepath(&customRulePoints));
-    drawing_scene->addItem(customRule);
+    drawingScene->addItem(customRule);
 }
 
 MainWindow::~MainWindow()
@@ -252,7 +252,7 @@ void MainWindow::draw_mode()
 {
     drawModeFlag = true;
     mainSceneWidget->hide();
-    setScene(drawing_scene);
+    setScene(drawingScene);
     new_joint->show();
     delete_joint_button->show();
     accept_custom_rule->show();
@@ -261,20 +261,20 @@ void MainWindow::draw_mode()
     setTransform(QTransform(1,0,0,1,0,0));
 }
 
-void MainWindow::create_joint()
+void MainWindow::createJoint()
 {
     Joint *joint = new Joint;
     joint->setPos(500,500);
     joints << joint;
-    drawing_scene->addItem(joint);
+    drawingScene->addItem(joint);
 }
 
-void MainWindow::delete_joint()
+void MainWindow::deleteJoint()
 {
     if(joints.size())
     {
-    joints.last()->~Joint();
-    joints.removeLast();
+        joints.last()->~Joint();
+        joints.removeLast();
     }
 }
 
@@ -305,12 +305,9 @@ void MainWindow::accept_rule()
     accept_custom_rule->hide();
     cancel_custom_rule->hide();
     setDragMode(ScrollHandDrag);
+\
     joints_backup.clear();
-    for(int i = 0; i < joints.size(); i++)
-    {
-        QPointF dot = joints.at(i)->pos();
-        joints_backup << dot;
-    }
+    joints_backup = joints;
     setTransform(QTransform(1,0,0,1,0,0));
 }
 
@@ -324,18 +321,9 @@ void MainWindow::cancel_rule()
     accept_custom_rule->hide();
     cancel_custom_rule->hide();
     setDragMode(ScrollHandDrag);
-    for(int i = 0; i < joints.size(); i++)
-    {
-        joints.at(i)->~Joint();
-        joints.remove(i);
-    }
-    for(int i = 0; i < joints_backup.size(); i++)
-    {
-        Joint *joint = new Joint;
-        joint->setPos(joints_backup.at(i).x(),joints_backup.at(i).y());
-        joints << joint;
-        drawing_scene->addItem(joint);
-    }
+
+    joints.clear();
+    joints = joints_backup;
     change_custom_rule();
     setTransform(QTransform(1,0,0,1,0,0));
 }

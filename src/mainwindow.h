@@ -35,11 +35,11 @@ public:
     QPainterPath makepath(QVector<QPointF> *points);
 
     QGraphicsScene *scene;
-    QGraphicsScene *drawing_scene;
+    QGraphicsScene *drawingScene;
     MainWindow(QWidget *parent = 0);
     QVector<QPointF> points;
     QVector<Joint*> joints;
-    QVector<QPointF> joints_backup;
+    QVector<Joint*> joints_backup;
     QVector<QPointF> customRulePoints;
     QVector<QPointF> custom_rule_points_modifier;
     QPushButton *button;
@@ -69,8 +69,8 @@ public slots:
     void new_item();
     void draw_mode();
     void change_custom_rule();
-    void create_joint();
-    void delete_joint();
+    void createJoint();
+    void deleteJoint();
     void accept_rule();
     void cancel_rule();
 };
