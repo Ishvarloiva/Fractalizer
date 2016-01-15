@@ -4,8 +4,6 @@
 MainWindow::MainWindow(QWidget *parent)
     : QGraphicsView(parent)
 {
-    drawModeFlag = false;
-
     //Initialize parameters of main window widget
     setRenderHint(QPainter::Antialiasing);
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -14,11 +12,13 @@ MainWindow::MainWindow(QWidget *parent)
     setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
 
     mainSceneInitialization();
-    drawingSceneInitialization();
 
-    new_item();
+    drawingWindow = new DrawingWindow(&customRulePoints);
+
+    resetFractal();
 }
 
+//Initialize main scene where fractal is drawn
 void MainWindow::mainSceneInitialization()
 {
     //Create scene
@@ -45,31 +45,31 @@ void MainWindow::mainSceneInitialization()
     //Configure button to enter drawing of custom rule
     draw_rule = new QPushButton("Draw custom rule");
     connect(draw_rule,SIGNAL(clicked()),
-            this,SLOT(draw_mode()));
+            this,SLOT(openDrawingWindow()));
 
     //Configure combobox of starting figures
-    type = new QComboBox();
-    type->addItem("Line");
-    type->addItem("Triangle");
-    type->addItem("Square");
-    type->addItem("Pentagon");
-    type->addItem("Hexagon");
-    type->addItem("Septagon");
-    type->addItem("Octagon");
+    figure = new QComboBox();
+    figure->addItem("Line");
+    figure->addItem("Triangle");
+    figure->addItem("Square");
+    figure->addItem("Pentagon");
+    figure->addItem("Hexagon");
+    figure->addItem("Septagon");
+    figure->addItem("Octagon");
 
     //Configure enclosed figure radiobutton
     enclosed = new QRadioButton("Enclosed");
 
     //Redraw figure if figure of enclosed were changed
-    connect(type,SIGNAL(activated(int)),
-            this,SLOT(new_item()));
+    connect(figure,SIGNAL(activated(int)),
+            this,SLOT(resetFractal()));
     connect(enclosed,SIGNAL(toggled(bool)),
-            this,SLOT(new_item()));
+            this,SLOT(resetFractal()));
 
     //Place type and eclosed in one parameters groupbox
     parameters = new QGroupBox("Parameters");
     parameters->setLayout(&parametersLayout);
-    parametersLayout.addWidget(type);
+    parametersLayout.addWidget(figure);
     parametersLayout.addWidget(enclosed);
 
     //Create widget for all elements of main scene and place it there
@@ -82,51 +82,6 @@ void MainWindow::mainSceneInitialization()
     mainSceneLayout.addWidget(parameters);
 }
 
-void MainWindow::drawingSceneInitialization()
-{
-    //Create drawing scene
-    drawingScene = new QGraphicsScene;
-    drawingScene->setSceneRect(0,0,1000,1000);
-
-    //Configure button that create new joint of custom rule
-    new_joint = new QPushButton("New joint",this);
-    connect(new_joint,SIGNAL(clicked()),
-            this,SLOT(createJoint()));
-    new_joint->setGeometry(0,0,100,50);
-    new_joint->hide();
-
-    //Configure button that delete last created joint of custom rule
-    delete_joint_button = new QPushButton("Delete joint",this);
-    connect(delete_joint_button,SIGNAL(clicked()),
-            this,SLOT(deleteJoint()));
-    delete_joint_button->setGeometry(0,50,100,50);
-    delete_joint_button->hide();
-
-    //Configure button that accepts and save custom rule
-    accept_custom_rule = new QPushButton("Accept", this);
-    connect(accept_custom_rule,SIGNAL(clicked()),
-            this,SLOT(accept_rule()));
-    accept_custom_rule->setGeometry(0,100,100,50);
-    accept_custom_rule->hide();
-
-    //Configure button that cancel and restore previous custom rule
-    cancel_custom_rule = new QPushButton("Cancel", this);
-    connect(cancel_custom_rule,SIGNAL(clicked()),
-            this,SLOT(cancel_rule()));
-    cancel_custom_rule->setGeometry(0,150,100,50);
-    cancel_custom_rule->hide();
-
-    //Make scene dynamically redraw
-    connect(drawingScene,SIGNAL(changed(QList<QRectF>)),
-        this,SLOT(change_custom_rule()));
-
-    //Create and place stub for custom rule
-    customRulePoints << QPointF(150,500) << QPointF(850,500);
-    customRule = new QGraphicsPathItem();
-    customRule->setPath(makepath(&customRulePoints));
-    drawingScene->addItem(customRule);
-}
-
 MainWindow::~MainWindow()
 {
 
@@ -135,46 +90,68 @@ MainWindow::~MainWindow()
 //Calculates next step of fractal
 void MainWindow::step()
 {
+    //First create empty vector of points
     QVector<QPointF> *tmp = new QVector<QPointF>;
+
+    //Next go through all points of current fractal
     for(int i = 0; i < points.size() - 1; i++)
     {
+        //Put current point in new path
         *tmp << points.at(i);
-        initialize(i);
+
+        //Calculate length of line from current to next point and at what degree to horizontal line it situated
+        float line = sqrt(pow(points.at(i).x()-points.at(i+1).x(),2) + pow(points.at(i).y()-points.at(i+1).y(),2));
+        float cosine = (points.at(i+1).x()-points.at(i).x()) / line;
+        float sine   = (points.at(i+1).y()-points.at(i).y()) / line;
+
+        //Next by index of combobox of four possible rules are applied where fourth one is custom
+        //Each rule works by defining how each line will become compound path
+        //There are defined where to place points regarding first one
         switch(rule->currentIndex())
         {
         case 0:
-            Koch(i, tmp);
+            Koch(i, tmp, line, cosine, sine);
             break;
         case 1:
-            Levi(i, tmp);
+            Levi(i, tmp, line, cosine, sine);
             break;
         case 2:
-            Minkovski(i, tmp);
+            Minkovski(i, tmp, line, cosine, sine);
             break;
         case 3:
-            Custom_Drawing(tmp);
+            customRuleStep(tmp, line, cosine, sine);
             break;
         }
     }
+    //There are no calculation from last point but it should not be forgotten
     *tmp << points.last();
+
+    //Apply changes
     points = *tmp;
-    fractal->setPath(makepath(&points));
+
+    //Don't forget to release memory used
+    tmp->clear();
+
+    //Create path by just calculated points
+    fractal->setPath(createPath(points));
 }
 
-void MainWindow::Koch(int i, QVector<QPointF> *tmp)
+//Describe Koch rule for fractal step
+void MainWindow::Koch(int i, QVector<QPointF> *tmp, float line, float cosine, float sine)
 {
     *tmp << QPointF((points.at(i+1).x()+points.at(i).x())/2 - (line/6 * cosine),(points.at(i+1).y()+points.at(i).y())/2 - (line/6 * sine));
     *tmp << QPointF((points.at(i+1).x()+points.at(i).x())/2 + (line/3 * sine)*cos(PI/6),(points.at(i+1).y()+points.at(i).y())/2 - (line/3 * cosine)*cos(PI/6));
     *tmp << QPointF((points.at(i+1).x()+points.at(i).x())/2 + (line/6 * cosine),(points.at(i+1).y()+points.at(i).y())/2 + (line/6 * sine));
 }
 
-void MainWindow::Levi(int i, QVector<QPointF> *tmp)
+//Describe Levi rule for fractal step
+void MainWindow::Levi(int i, QVector<QPointF> *tmp, float line, float cosine, float sine)
 {
-
     *tmp << QPointF((points.at(i+1).x()+points.at(i).x())/2 + (line * sine * 0.5),(points.at(i+1).y()+points.at(i).y())/2 - (line * cosine * 0.5));
 }
 
-void MainWindow::Minkovski(int i, QVector<QPointF> *tmp)
+//Describe Minkovski rule for fractal step
+void MainWindow::Minkovski(int i, QVector<QPointF> *tmp, float line, float cosine, float sine)
 {
     *tmp << QPointF(points.at(i).x() + line * cosine / 4,points.at(i).y() + line * sine / 4);
     *tmp << QPointF(points.at(i).x() + line * cosine / 4 + line * sine / 4,points.at(i).y() + line * sine / 4 - line * cosine / 4);
@@ -185,145 +162,63 @@ void MainWindow::Minkovski(int i, QVector<QPointF> *tmp)
     *tmp << QPointF(points.at(i).x() + line * cosine*3/4,points.at(i).y() + line * sine*3/4);
 }
 
-void MainWindow::Custom_Drawing(QVector<QPointF> *tmp)
+//Run algorithm by defined custom rule
+void MainWindow::customRuleStep(QVector<QPointF> *tmp, float line, float cosine, float sine)
 {
     QPointF anchor(tmp->last().x(),tmp->last().y());
-    for(int i = 0; i < custom_rule_points_modifier.size(); i++)
+    for(int i = 0; i < customRulePoints.size(); i++)
     {
-        float x = custom_rule_points_modifier.at(i).x();
-        float y = custom_rule_points_modifier.at(i).y();
+        float x = (customRulePoints.at(i).x() - 150) / 700;
+        float y = (customRulePoints.at(i).y() - 500) / 700;
         *tmp << QPointF(anchor.x() + x * line * cosine - y * line * sine,
                         anchor.y() + x * line * sine + y * line * cosine);
     }
 }
 
-void MainWindow::initialize(int i)
-{
-    line = sqrt(pow(points.at(i).x()-points.at(i+1).x(),2) + pow(points.at(i).y()-points.at(i+1).y(),2));
-    cosine = (points.at(i+1).x()-points.at(i).x()) / line;
-    sine   = (points.at(i+1).y()-points.at(i).y()) / line;
-}
-
-QPainterPath MainWindow::makepath(QVector<QPointF> *points)
-{
-    QPainterPath tmp;
-    tmp.moveTo(points->first());
-    for(int i = 1; i < points->size(); i++)
-        tmp.lineTo(points->at(i));
-    return tmp;
-}
-
+//Zoom in and out by mouse wheel, with shift rotates
 void MainWindow::wheelEvent(QWheelEvent *e)
 {
-    if(!drawModeFlag)
+    if(e->modifiers() == Qt::ShiftModifier)
     {
-        if(e->modifiers() == Qt::ShiftModifier)
-        {
-            if(e->delta() > 0) transformAngle += PI / 36;
-            else transformAngle -= PI / 36;
-        }
-        else
-        {
-            if(e->delta() > 0) scaleFactor *= 1.1;
-            else scaleFactor /= 1.1;
-        }
-        setTransform(QTransform(scaleFactor*cos(transformAngle),scaleFactor*sin(transformAngle),scaleFactor*-sin(transformAngle),scaleFactor*cos(transformAngle),0,0));
+        if(e->delta() > 0) transformAngle += PI / 36;
+        else transformAngle -= PI / 36;
     }
+    else
+    {
+        if(e->delta() > 0) scaleFactor *= 1.2;
+        else scaleFactor /= 1.2;
+    }
+    setTransform(QTransform(scaleFactor*cos(transformAngle),
+                            scaleFactor*sin(transformAngle),
+                            scaleFactor*-sin(transformAngle),
+                            scaleFactor*cos(transformAngle),0,0));
 }
 
-void MainWindow::new_item()
+//Reset path to simple figure which is chosen by figure combobox
+void MainWindow::resetFractal()
 {
     points.clear();
-    for(int i = 0; i < type->currentIndex() + 2; i++)
+
+    //Cycle build ideal figure by points
+    for(int i = 0; i < figure->currentIndex() + 2; i++)
     {
-        float angle = (2 * PI * i + PI) / (type->currentIndex() + 2);
+        float angle = (2 * PI * i + PI) / (figure->currentIndex() + 2);
         points << QPointF(500 - 300 * sin(angle),
                           500 + 300 * cos(angle));
     }
+
+    //If figure should enclosed then add first point again
     if(enclosed->isChecked()) points << points.first();
-    fractal->setPath(makepath(&points));
+    fractal->setPath(createPath(points));
+
+    //Reset zooming and rotation
     scaleFactor = 1;
     transformAngle = 0;
     setTransform(QTransform(1,0,0,1,0,0));
-    //fractal->update(0,0,1000,1000);
 }
 
-void MainWindow::draw_mode()
+//Slot that shows drawing window for custom rule
+void MainWindow::openDrawingWindow()
 {
-    drawModeFlag = true;
-    mainSceneWidget->hide();
-    setScene(drawingScene);
-    new_joint->show();
-    delete_joint_button->show();
-    accept_custom_rule->show();
-    cancel_custom_rule->show();
-    setDragMode(NoDrag);
-    setTransform(QTransform(1,0,0,1,0,0));
-}
-
-void MainWindow::createJoint()
-{
-    Joint *joint = new Joint;
-    joint->setPos(500,500);
-    joints << joint;
-    drawingScene->addItem(joint);
-}
-
-void MainWindow::deleteJoint()
-{
-    if(joints.size())
-    {
-        joints.last()->~Joint();
-        joints.removeLast();
-    }
-}
-
-void MainWindow::change_custom_rule()
-{
-    customRulePoints.clear();
-    customRulePoints << QPointF(150,500);
-    for(int i = 0; i < joints.size(); i ++)
-    {
-        customRulePoints << joints.at(i)->pos();
-    }
-    customRulePoints << QPointF(850,500);
-    customRule->setPath(makepath(&customRulePoints));
-}
-
-void MainWindow::accept_rule()
-{
-    drawModeFlag = false;
-    custom_rule_points_modifier.clear();
-    for(int i = 1; i < customRulePoints.size() - 1; i++)
-    {
-        custom_rule_points_modifier << QPointF((customRulePoints.at(i).x() - 150)/700,(customRulePoints.at(i).y() - 500)/700);
-    }
-    mainSceneWidget->show();
-    setScene(scene);
-    new_joint->hide();
-    delete_joint_button->hide();
-    accept_custom_rule->hide();
-    cancel_custom_rule->hide();
-    setDragMode(ScrollHandDrag);
-\
-    joints_backup.clear();
-    joints_backup = joints;
-    setTransform(QTransform(1,0,0,1,0,0));
-}
-
-void MainWindow::cancel_rule()
-{
-    drawModeFlag = false;
-    mainSceneWidget->show();
-    setScene(scene);
-    new_joint->hide();
-    delete_joint_button->hide();
-    accept_custom_rule->hide();
-    cancel_custom_rule->hide();
-    setDragMode(ScrollHandDrag);
-
-    joints.clear();
-    joints = joints_backup;
-    change_custom_rule();
-    setTransform(QTransform(1,0,0,1,0,0));
+    drawingWindow->show();
 }

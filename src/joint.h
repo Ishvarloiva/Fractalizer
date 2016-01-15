@@ -3,6 +3,8 @@
 
 #include <QGraphicsItem>
 #include "QMouseEvent"
+
+//Movable point for drawing custom rule
 class Joint : public QGraphicsEllipseItem
 {
 public:

@@ -14,7 +14,11 @@ TEMPLATE = app
 
 SOURCES += main.cpp\
         mainwindow.cpp \
-    joint.cpp
+    joint.cpp \
+    drawingwindow.cpp \
+    createpath.cpp
 
 HEADERS  += mainwindow.h \
-    joint.h
+    joint.h \
+    drawingwindow.h \
+    createpath.h
